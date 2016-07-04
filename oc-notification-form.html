@@ -1,0 +1,182 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<link rel="import" href="../iron-form/iron-form.html">
+                         ..
+<link rel="import" href="../paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../paper-input/paper-input.html">
+<link rel="import" href="../paper-card/paper-card.html">
+<link rel="import" href="../paper-menu/paper-menu.html">
+<link rel="import" href="../paper-item/paper-item.html">
+
+<dom-module id="oc-notification-form">
+
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+      paper-card {
+        width: 100%;
+      }
+      paper-dropdown-menu {
+        display: block;
+      }
+      paper-checkbox {
+        display: block;
+      }
+      label {
+        margin-top: 0.8em;
+        font-weight: normal;
+        color: #727272;
+      }
+      paper-icon-button.save {
+        color: var(--default-primary-color);
+      }
+    </style>
+    <paper-card heading="[[ _getNotificationFormHeading(subscription) ]]">
+      <div class="card-content">
+        <!--<p>Some description/instructions</p>-->
+        <form is="iron-form" id="form">
+
+          <paper-dropdown-menu label="Event Type" name="eventType" required horizontal-align="left">
+            <paper-menu
+                    class="dropdown-content"
+                    selected="{{ selectedEventTypeName }}"
+                    selected-item="{{ eventType }}"
+                    attr-for-selected="label"
+                    on-iron-select="_whenEventTypeSelected"
+            >
+              <template is="dom-repeat" items="[[ eventTypes ]]" as="type">
+                <paper-item role="menuitem" event-type="[[ type ]]" label="[[ type.value ]]">[[ type.displayName ]]</paper-item>
+              </template>
+            </paper-menu>
+          </paper-dropdown-menu>
+
+          <paper-dropdown-menu id="channelDropdown" label="Channel" name="channel" required horizontal-align="left" hidden>
+            <paper-menu
+                    id="channelSelect"
+                    class="dropdown-content"
+                    selected="[[ subscription.channel.value ]]"
+                    selected-item="{{ channel }}"
+                    attr-for-selected="label"
+                    on-iron-select="_whenChannelSelected"
+            >
+              <template is="dom-repeat" items="[[ eventType.eventType.channels ]]">
+                <paper-item channel="[[ item ]]" label="[[ item.value ]]">[[ item.displayName ]]</paper-item>
+              </template>
+            </paper-menu>
+          </paper-dropdown-menu>
+
+          <div id="parties" hidden>
+            <label>Parties</label>
+            <template is="dom-repeat" items="[[ channel.channel.parties ]]" as="party">
+              <paper-checkbox value="[[ party.value ]]" name="parties" checked$="[[ _isSelectedParty(subscription, party) ]]">
+                [[ party.displayName ]]
+              </paper-checkbox>
+            </template>
+          </div>
+
+          <paper-input
+                  id="recipientsInput"
+                  hidden
+                  label="Recipients"
+                  name="recipients"
+                  placeholder="Comma seperated list of emails/cellphone numbers"
+          ></paper-input>
+
+        </form>
+      </div>
+      <div class="card-actions">
+        <paper-icon-button icon="icons:save" class="save" on-tap="save"></paper-icon-button>
+        <paper-icon-button icon="icons:clear" on-tap="cancel"></paper-icon-button>
+      </div>
+    </paper-card>
+  </template>
+
+  <script>
+    (function () {
+      'use strict';
+
+      Polymer({
+        is: 'oc-notification-form',
+
+        properties: {
+          subscription: {
+            type: Object,
+          },
+          eventTypes: Array,
+        },
+
+        cancel: function() {
+          this.fire('notification-form-cancelled');
+        },
+
+        save: function() {
+          var subscription = this.$.form.serialize();
+
+          subscription.parties = subscription.parties || [];
+          if (!Array.isArray(subscription.parties)) {
+            subscription.parties = [subscription.parties];
+          }
+          subscription.recipients = subscription.recipients.split(',')
+                  .map(function(recipient) {
+                    return recipient.trim();
+                  })
+                  .filter(function(recipient) {
+                    return recipient;
+                  });
+
+          if (this.subscription && 'id' in this.subscription) {
+            subscription.id = this.subscription.id;
+          }
+
+          this.fire('notification-form-save', subscription);
+        },
+
+        init: function(subscription) {
+          this.set('subscription', subscription);
+          if (!subscription) {
+            this.selectedEventTypeName = '';
+            this.selectedChannelName = '';
+            this._whenEventTypeSelected();
+            return;
+          }
+
+          this.initialising = true;
+          this.selectedEventTypeName = subscription.eventType.value;
+          this.selectedChannelName = subscription.channel.value;
+          this.$.recipientsInput.value = subscription.recipients.join(', ');
+          this.initialising = false;
+        },
+
+        _getNotificationFormHeading: function(subscription) {
+          return subscription && 'id' in subscription ? 'Edit Notification' : 'New Notification';
+        },
+
+        _isSelectedParty: function(subscription, party) {
+          return subscription && 'parties' in subscription && subscription.parties.some(function(subscriptionParty) {
+                    return subscriptionParty.value === party.value;
+                  });
+        },
+
+        _whenEventTypeSelected: function() {
+          this.$.channelDropdown.hidden = !this.eventType;
+          if (!this.initialising) {
+            this.$.channelSelect.selected = null;
+            this.$.parties.hidden = true;
+            this.$.recipientsInput.hidden = true;
+          }
+        },
+
+        _whenChannelSelected: function() {
+          this.$.parties.hidden = !this.channel || this.channel.channel.parties.length === 0;
+          this.$.recipientsInput.hidden = !this.channel || !this.channel.channel.recipientEnabled;
+        },
+
+      });
+    })();
+  </script>
+
+</dom-module>
